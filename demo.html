@@ -87,13 +87,15 @@
     const chart = document.querySelector("#chart");
     chart.setConfig({
       title: "Psychrometric frequency — synthetic demo",
-      default_range: "1m",
+      default_range: "12m",
       default_colour_mode: "sensor",
+      default_axis_mode: "auto_both",
       altitude: 0,
       sea_level_pressure: 101.325,
       humidity_ratio_reference_temperature: 20,
       min_temperature: -10,
       max_temperature: 40,
+      min_absolute_humidity: 0,
       max_absolute_humidity: 25,
       temperature_bin: .5,
       absolute_humidity_bin: .25,
