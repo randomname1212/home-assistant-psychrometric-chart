@@ -1,6 +1,4 @@
 /*
- * SPDX-License-Identifier: MIT
- *
  * Psychrometric frequency chart for Home Assistant Lovelace.
  *
  * The card reads paired temperature/relative-humidity recorder statistics and
@@ -125,11 +123,13 @@ class PsychrometricChartCard extends HTMLElement {
       humidity_ratio_reference_temperature: 20,
       min_temperature: -10,
       max_temperature: 40,
+      min_absolute_humidity: 0,
       max_absolute_humidity: 25,
       temperature_bin: 0.5,
       absolute_humidity_bin: 0.25,
-      default_range: "1m",
+      default_range: "12m",
       default_colour_mode: "original",
+      default_axis_mode: "auto_both",
       ...config,
       series,
     };
@@ -155,13 +155,14 @@ class PsychrometricChartCard extends HTMLElement {
 
     this._range = PSY_DEFAULT_RANGES[this._range]
       ? this._range : this.config.default_range;
-    if (!PSY_DEFAULT_RANGES[this._range]) this._range = "1m";
+    if (!PSY_DEFAULT_RANGES[this._range]) this._range = "12m";
     // Custom date controls are initialised to the most recent month and then
     // retained while the user switches between preset and custom ranges.
     const today = new Date();
     const oneMonthAgo = new Date(today.getTime() - 30 * 24 * 3600000);
     this._customStart = this._customStart || psyDateInputValue(oneMonthAgo);
     this._customEnd = this._customEnd || psyDateInputValue(today);
+    this._readAxisPreferences();
     this._data = null;
     this._live = [];
     this._error = null;
@@ -304,6 +305,45 @@ class PsychrometricChartCard extends HTMLElement {
     }).catch(() => {});
   }
 
+  // Axis settings are dashboard presentation preferences. Keeping them in
+  // local storage makes manual fixed bounds survive ordinary browser reloads.
+  _readAxisPreferences() {
+    const allowedModes = ["auto_both", "auto_temperature", "auto_humidity", "fixed"];
+    const defaults = {
+      mode: this.config.default_axis_mode,
+      temperatureMin: Number(this.config.min_temperature),
+      temperatureMax: Number(this.config.max_temperature),
+      absoluteMin: Number(this.config.min_absolute_humidity),
+      absoluteMax: Number(this.config.max_absolute_humidity),
+    };
+    let stored = {};
+    try {
+      stored = JSON.parse(localStorage.getItem("psychrometric_chart_axis_settings") || "{}");
+    } catch (error) {
+      // Malformed/disabled storage falls back to the Lovelace configuration.
+    }
+    this._axisMode = allowedModes.includes(this._axisMode || stored.mode)
+      ? (this._axisMode || stored.mode) : defaults.mode;
+    if (!allowedModes.includes(this._axisMode)) this._axisMode = "auto_both";
+    this._fixedBounds = {
+      temperatureMin: Number.isFinite(Number(stored.temperatureMin)) ? Number(stored.temperatureMin) : defaults.temperatureMin,
+      temperatureMax: Number.isFinite(Number(stored.temperatureMax)) ? Number(stored.temperatureMax) : defaults.temperatureMax,
+      absoluteMin: Number.isFinite(Number(stored.absoluteMin)) ? Number(stored.absoluteMin) : defaults.absoluteMin,
+      absoluteMax: Number.isFinite(Number(stored.absoluteMax)) ? Number(stored.absoluteMax) : defaults.absoluteMax,
+    };
+  }
+
+  _saveAxisPreferences() {
+    try {
+      localStorage.setItem("psychrometric_chart_axis_settings", JSON.stringify({
+        mode: this._axisMode,
+        ...this._fixedBounds,
+      }));
+    } catch (error) {
+      // In-memory settings remain active when local storage is unavailable.
+    }
+  }
+
   /* -----------------------------------------------------------------------
    * DOM construction and controls
    * -------------------------------------------------------------------- */
@@ -329,6 +369,13 @@ class PsychrometricChartCard extends HTMLElement {
       .custom-range input { box-sizing:border-box; height:32px; border-radius:7px;
         border:1px solid var(--divider-color); background:var(--card-background-color);
         color:var(--primary-text-color); font:inherit; padding:0 7px; color-scheme:dark light; }
+      .axis-controls { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px;
+        padding:0 16px 9px; color:var(--secondary-text-color); font-size:12px; }
+      .axis-controls[hidden] { display:none; }
+      .axis-controls label { display:inline-flex; align-items:center; gap:5px; }
+      .axis-controls input { box-sizing:border-box; width:76px; height:32px; border-radius:7px;
+        border:1px solid var(--divider-color); background:var(--card-background-color);
+        color:var(--primary-text-color); font:inherit; padding:0 7px; }
       .series-toggles { padding:0 16px 9px; overflow-x:auto; }
       .series-table { width:100%; border-collapse:collapse; color:var(--primary-text-color); font-size:12px; }
       .series-table th, .series-table td { padding:4px 8px; border-bottom:1px solid var(--divider-color); text-align:left; }
@@ -368,6 +415,7 @@ class PsychrometricChartCard extends HTMLElement {
         .title { width:100%; font-size:16px; }
         .series-toggles, .status { padding-left:10px; padding-right:10px; }
         .custom-range { padding-left:10px; padding-right:10px; }
+        .axis-controls { padding-left:10px; padding-right:10px; }
         .chart-wrap, svg { min-height:390px; }
         .foot { padding:6px 10px 11px; }
       }
@@ -383,11 +431,23 @@ class PsychrometricChartCard extends HTMLElement {
           <option value="sensor">Per-sensor colours</option>
         </select>
         <select class="range" aria-label="History period"></select>
+        <select class="axis-mode" aria-label="Axis scale mode">
+          <option value="auto_both">Auto scale both axes</option>
+          <option value="auto_temperature">Auto scale temperature</option>
+          <option value="auto_humidity">Auto scale humidity</option>
+          <option value="fixed">Fixed custom scales</option>
+        </select>
         <button class="refresh" title="Refresh statistics"><ha-icon icon="mdi:refresh"></ha-icon> Refresh</button>
       </div>
       <div class="custom-range" hidden>
         <label>Start <input class="custom-start" type="date"></label>
         <label>End <input class="custom-end" type="date"></label>
+      </div>
+      <div class="axis-controls" hidden>
+        <label>Temperature min <input class="axis-temperature-min" type="number" step="0.5"> °C</label>
+        <label>Temperature max <input class="axis-temperature-max" type="number" step="0.5"> °C</label>
+        <label>Absolute humidity min <input class="axis-absolute-min" type="number" step="0.25"> g/m³</label>
+        <label>Absolute humidity max <input class="axis-absolute-max" type="number" step="0.25"> g/m³</label>
       </div>
       <div class="status"><span class="live"><i class="dot"></i><span class="live-text">Live: —</span></span><span class="spacer"></span><span class="summary"></span></div>
       <div class="chart-wrap"><svg role="img" aria-label="Psychrometric frequency chart"></svg><div class="tooltip"></div></div>
@@ -405,6 +465,12 @@ class PsychrometricChartCard extends HTMLElement {
       seriesBody: card.querySelector(".series-body"),
       colourMode: card.querySelector(".colour-mode"),
       range: card.querySelector(".range"),
+      axisMode: card.querySelector(".axis-mode"),
+      axisControls: card.querySelector(".axis-controls"),
+      axisTemperatureMin: card.querySelector(".axis-temperature-min"),
+      axisTemperatureMax: card.querySelector(".axis-temperature-max"),
+      axisAbsoluteMin: card.querySelector(".axis-absolute-min"),
+      axisAbsoluteMax: card.querySelector(".axis-absolute-max"),
       customRange: card.querySelector(".custom-range"),
       customStart: card.querySelector(".custom-start"),
       customEnd: card.querySelector(".custom-end"),
@@ -479,6 +545,38 @@ class PsychrometricChartCard extends HTMLElement {
     };
     this._els.customStart.addEventListener("change", customDateChanged);
     this._els.customEnd.addEventListener("change", customDateChanged);
+    this._els.axisMode.value = this._axisMode;
+    this._els.axisControls.hidden = this._axisMode !== "fixed";
+    this._els.axisTemperatureMin.value = String(this._fixedBounds.temperatureMin);
+    this._els.axisTemperatureMax.value = String(this._fixedBounds.temperatureMax);
+    this._els.axisAbsoluteMin.value = String(this._fixedBounds.absoluteMin);
+    this._els.axisAbsoluteMax.value = String(this._fixedBounds.absoluteMax);
+    this._els.axisMode.addEventListener("change", () => {
+      this._axisMode = this._els.axisMode.value;
+      this._els.axisControls.hidden = this._axisMode !== "fixed";
+      this._saveAxisPreferences();
+      this._data = null;
+      this._loadKey = null;
+      this._load(true);
+    });
+    // All four fixed bounds are user-editable. Rebinning after a change keeps
+    // the chart, heatmap and hover coordinates on the same explicit scale.
+    const fixedAxisChanged = () => {
+      this._fixedBounds = {
+        temperatureMin: Number(this._els.axisTemperatureMin.value),
+        temperatureMax: Number(this._els.axisTemperatureMax.value),
+        absoluteMin: Number(this._els.axisAbsoluteMin.value),
+        absoluteMax: Number(this._els.axisAbsoluteMax.value),
+      };
+      this._saveAxisPreferences();
+      if (this._axisMode !== "fixed") return;
+      this._data = null;
+      this._loadKey = null;
+      this._load(true);
+    };
+    [this._els.axisTemperatureMin, this._els.axisTemperatureMax,
+      this._els.axisAbsoluteMin, this._els.axisAbsoluteMax]
+      .forEach((input) => input.addEventListener("change", fixedAxisChanged));
     this._els.refresh.addEventListener("click", () => this._load(true));
     this._els.svg.addEventListener("pointermove", (event) => this._pointerMove(event));
     this._els.svg.addEventListener("pointerleave", () => { this._els.tooltip.style.display = "none"; });
@@ -553,6 +651,76 @@ class PsychrometricChartCard extends HTMLElement {
     };
   }
 
+  // Validate the four manually configured limits. This is also the fallback
+  // used by automatic modes when no historical samples are available.
+  _configuredBounds(validate = true) {
+    const bounds = { ...this._fixedBounds };
+    const finite = Object.values(bounds).every((value) => Number.isFinite(value));
+    const ordered = bounds.temperatureMin < bounds.temperatureMax
+      && bounds.absoluteMin < bounds.absoluteMax;
+    if (validate && (!finite || !ordered)) {
+      throw new Error("Fixed axis minimums must be numeric and lower than their maximums.");
+    }
+    if (!finite || !ordered) {
+      return { temperatureMin: -10, temperatureMax: 40, absoluteMin: 0, absoluteMax: 25 };
+    }
+    return bounds;
+  }
+
+  // Automatic bounds are calculated from the actual selected recorder samples.
+  // A small pad and rounded half-unit limits avoid data touching the frame.
+  _axisBounds(samples) {
+    const fixed = this._configuredBounds(true);
+    const autoTemperature = ["auto_both", "auto_temperature"].includes(this._axisMode);
+    const autoHumidity = ["auto_both", "auto_humidity"].includes(this._axisMode);
+    if ((!autoTemperature && !autoHumidity) || !samples.length) return fixed;
+
+    // Track extrema in one pass. This avoids spreading a year of hourly
+    // samples into Math.min/Math.max, which can exceed a browser's argument
+    // limit when several sensors are selected.
+    let temperatureMinimum = Infinity;
+    let temperatureMaximum = -Infinity;
+    let absoluteMinimum = Infinity;
+    let absoluteMaximum = -Infinity;
+    samples.forEach((sample) => {
+      const absolute = psyAbsoluteHumidity(sample.t, sample.rh / 100);
+      if (Number.isFinite(sample.t) && Number.isFinite(absolute)) {
+        temperatureMinimum = Math.min(temperatureMinimum, sample.t);
+        temperatureMaximum = Math.max(temperatureMaximum, sample.t);
+        absoluteMinimum = Math.min(absoluteMinimum, absolute);
+        absoluteMaximum = Math.max(absoluteMaximum, absolute);
+      }
+    });
+    if (!Number.isFinite(temperatureMinimum)) return fixed;
+
+    const result = { ...fixed };
+    if (autoTemperature) {
+      const minimum = temperatureMinimum;
+      const maximum = temperatureMaximum;
+      const padding = Math.max(1, (maximum - minimum) * 0.06);
+      result.temperatureMin = Math.floor((minimum - padding) * 2) / 2;
+      result.temperatureMax = Math.ceil((maximum + padding) * 2) / 2;
+      if (result.temperatureMax - result.temperatureMin < 5) {
+        const centre = (result.temperatureMin + result.temperatureMax) / 2;
+        result.temperatureMin = Math.floor((centre - 2.5) * 2) / 2;
+        result.temperatureMax = Math.ceil((centre + 2.5) * 2) / 2;
+      }
+    }
+    if (autoHumidity) {
+      const minimum = absoluteMinimum;
+      const maximum = absoluteMaximum;
+      const padding = Math.max(0.5, (maximum - minimum) * 0.08);
+      result.absoluteMin = Math.max(0, Math.floor((minimum - padding) * 2) / 2);
+      result.absoluteMax = Math.ceil((maximum + padding) * 2) / 2;
+      if (result.absoluteMax - result.absoluteMin < 3) {
+        const centre = (result.absoluteMin + result.absoluteMax) / 2;
+        result.absoluteMin = Math.max(0, Math.floor((centre - 1.5) * 2) / 2);
+        result.absoluteMax = Math.ceil((centre + 1.5) * 2) / 2;
+      }
+    }
+    return result;
+  }
+
   async _load(force = false) {
     if (!this._hass || this._loading) return;
     const selected = this._selectedSeries();
@@ -560,7 +728,7 @@ class PsychrometricChartCard extends HTMLElement {
     try {
       dateRange = this._resolveDateRange();
     } catch (error) {
-      this._data = this._bin([]);
+      this._data = this._bin([], this._configuredBounds(false));
       this._error = error.message;
       this._renderStatus();
       this._draw();
@@ -568,12 +736,21 @@ class PsychrometricChartCard extends HTMLElement {
     }
     const rangeKey = this._range === "custom"
       ? `${this._customStart}|${this._customEnd}` : this._range;
-    const key = `${selected.map((item) => item.index).join(",")}|${rangeKey}`;
+    // Scaling is part of the cache identity so a restored browser preference
+    // cannot accidentally reuse bins produced for a different set of bounds.
+    const axisKey = `${this._axisMode}|${Object.values(this._fixedBounds).join(",")}`;
+    const key = `${selected.map((item) => item.index).join(",")}|${rangeKey}|${axisKey}`;
     if (!force && this._loadKey === key && this._data) return;
 
     // An empty selection is valid and intentionally produces an empty chart.
     if (!selected.length) {
-      this._data = this._bin([]);
+      try {
+        this._data = this._bin([], this._axisBounds([]));
+        this._error = null;
+      } catch (error) {
+        this._data = this._bin([], this._configuredBounds(false));
+        this._error = error && error.message ? error.message : String(error);
+      }
       this._loadKey = key;
       this._renderStatus();
       this._draw();
@@ -613,13 +790,14 @@ class PsychrometricChartCard extends HTMLElement {
           }));
       }
 
-      this._data = this._bin(samples);
+      const bounds = this._axisBounds(samples);
+      this._data = this._bin(samples, bounds);
       this._data.from = dateRange.start;
       this._data.to = dateRange.end;
       this._loadKey = key;
       if (!samples.length) this._error = "No paired recorder statistics were returned for the selected sensors and period.";
     } catch (error) {
-      this._data = this._bin([]);
+      this._data = this._bin([], this._configuredBounds(false));
       this._error = error && error.message ? error.message : String(error);
     } finally {
       this._loading = false;
@@ -629,12 +807,10 @@ class PsychrometricChartCard extends HTMLElement {
   }
 
   // Convert each sample to absolute humidity and accumulate it into a fine bin.
-  _bin(samples) {
+  _bin(samples, bounds) {
     const temperatureStep = Number(this.config.temperature_bin) || 0.5;
     const absoluteStep = Number(this.config.absolute_humidity_bin) || 0.25;
-    const temperatureMin = Number(this.config.min_temperature);
-    const temperatureMax = Number(this.config.max_temperature);
-    const absoluteMax = Number(this.config.max_absolute_humidity);
+    const { temperatureMin, temperatureMax, absoluteMin, absoluteMax } = bounds;
     const bins = new Map();
     let totalHours = 0;
     let accepted = 0;
@@ -642,9 +818,9 @@ class PsychrometricChartCard extends HTMLElement {
     for (const sample of samples) {
       const absolute = psyAbsoluteHumidity(sample.t, sample.rh / 100);
       if (!Number.isFinite(absolute) || sample.t < temperatureMin || sample.t >= temperatureMax
-        || absolute < 0 || absolute >= absoluteMax) continue;
+        || absolute < absoluteMin || absolute >= absoluteMax) continue;
       const temperatureIndex = Math.floor((sample.t - temperatureMin) / temperatureStep);
-      const absoluteIndex = Math.floor(absolute / absoluteStep);
+      const absoluteIndex = Math.floor((absolute - absoluteMin) / absoluteStep);
       const key = `${temperatureIndex},${absoluteIndex}`;
       const current = bins.get(key) || {
         temperatureIndex, absoluteIndex, hours: 0, samples: 0,
@@ -676,6 +852,7 @@ class PsychrometricChartCard extends HTMLElement {
       temperatureStep,
       absoluteStep,
       maxHoursBySeries,
+      bounds,
     };
   }
 
@@ -719,10 +896,14 @@ class PsychrometricChartCard extends HTMLElement {
     }
     const hours = this._data ? this._data.totalHours : 0;
     const selectedCount = this._selectedIndexes.size;
+    const bounds = this._data?.bounds;
+    const scaleText = bounds
+      ? ` · T ${bounds.temperatureMin}–${bounds.temperatureMax} °C · AH ${bounds.absoluteMin}–${bounds.absoluteMax} g/m³`
+      : "";
     this._els.summary.className = `summary${hours ? "" : " empty"}`;
     this._els.summary.textContent = hours
-      ? `${hours.toLocaleString(undefined, { maximumFractionDigits: 1 })} sensor-hours · ${this._data.bins.length} occupied bins · ${selectedCount} selected`
-      : `${selectedCount} sensors selected`;
+      ? `${hours.toLocaleString(undefined, { maximumFractionDigits: 1 })} sensor-hours · ${this._data.bins.length} occupied bins · ${selectedCount} selected${scaleText}`
+      : `${selectedCount} sensors selected${scaleText}`;
   }
 
   // Shared multi-stop ramp: toggling sensors never changes the colour semantics.
@@ -773,17 +954,18 @@ class PsychrometricChartCard extends HTMLElement {
       width: width - margin.left - margin.right,
       height: height - margin.top - margin.bottom,
     };
-    const temperatureMin = Number(this.config.min_temperature);
-    const temperatureMax = Number(this.config.max_temperature);
-    const absoluteMax = Number(this.config.max_absolute_humidity);
+    const bounds = this._data?.bounds || this._configuredBounds(false);
+    const { temperatureMin, temperatureMax, absoluteMin, absoluteMax } = bounds;
     return {
-      width, height, plot, temperatureMin, temperatureMax, absoluteMax,
+      width, height, plot, temperatureMin, temperatureMax, absoluteMin, absoluteMax,
       x: (temperature) => plot.x + ((temperature - temperatureMin)
         / (temperatureMax - temperatureMin)) * plot.width,
-      y: (absolute) => plot.y + plot.height - (absolute / absoluteMax) * plot.height,
+      y: (absolute) => plot.y + plot.height - ((absolute - absoluteMin)
+        / (absoluteMax - absoluteMin)) * plot.height,
       inverseX: (x) => temperatureMin + ((x - plot.x) / plot.width)
         * (temperatureMax - temperatureMin),
-      inverseY: (y) => ((plot.y + plot.height - y) / plot.height) * absoluteMax,
+      inverseY: (y) => absoluteMin + ((plot.y + plot.height - y) / plot.height)
+        * (absoluteMax - absoluteMin),
     };
   }
 
@@ -793,7 +975,7 @@ class PsychrometricChartCard extends HTMLElement {
     for (let temperature = geometry.temperatureMin;
       temperature <= geometry.temperatureMax + 0.001; temperature += 0.2) {
       const absolute = psyAbsoluteHumidity(temperature, relativeHumidity / 100);
-      if (absolute > geometry.absoluteMax) continue;
+      if (absolute < geometry.absoluteMin || absolute > geometry.absoluteMax) continue;
       parts.push(`${parts.length ? "L" : "M"}${geometry.x(temperature).toFixed(1)},${geometry.y(absolute).toFixed(1)}`);
     }
     return parts.join(" ");
@@ -830,7 +1012,8 @@ class PsychrometricChartCard extends HTMLElement {
 
     // Both moisture scales are on the right: absolute humidity is the first
     // (primary) column, and humidity ratio is the second column farther right.
-    for (let absolute = 0; absolute <= geometry.absoluteMax + 0.001; absolute += 1) {
+    for (let absolute = Math.ceil(geometry.absoluteMin);
+      absolute <= geometry.absoluteMax + 0.001; absolute += 1) {
       const y = geometry.y(absolute);
       const major = absolute % 2 === 0;
       svg.push(`<line x1="${plot.x}" y1="${y}" x2="${plot.x + plot.width}" y2="${y}" stroke="${gridColour}" stroke-width="${major ? 1 : 0.55}" stroke-opacity="${major ? 1 : 0.55}"/>`);
@@ -862,7 +1045,7 @@ class PsychrometricChartCard extends HTMLElement {
         const x = geometry.x((lower + upper) / 2);
         const label = saturation ? "Relative Humidity 100%" : `${relativeHumidity}%`;
         relativeHumidityLabels.push(`<text x="${x}" y="${plot.y - 7}" text-anchor="${saturation ? "end" : "middle"}" fill="${textColour}" font-size="10">${label}</text>`);
-      } else {
+      } else if (absoluteAtRight >= geometry.absoluteMin) {
         // Curves that do not reach the top are labelled at the right boundary.
         relativeHumidityLabels.push(`<text x="${plot.x + plot.width - 6}" y="${geometry.y(absoluteAtRight) - 4}" text-anchor="end" fill="${textColour}" font-size="10">${relativeHumidity}%</text>`);
       }
@@ -875,7 +1058,8 @@ class PsychrometricChartCard extends HTMLElement {
       for (const bin of this._data.bins) {
         const temperature0 = geometry.temperatureMin
           + bin.temperatureIndex * this._data.temperatureStep;
-        const absolute0 = bin.absoluteIndex * this._data.absoluteStep;
+        const absolute0 = this._data.bounds.absoluteMin
+          + bin.absoluteIndex * this._data.absoluteStep;
         const x0 = geometry.x(temperature0);
         const x1 = geometry.x(temperature0 + this._data.temperatureStep);
         const y0 = geometry.y(absolute0 + this._data.absoluteStep);
@@ -903,7 +1087,7 @@ class PsychrometricChartCard extends HTMLElement {
     // Live points are pink rings; numbered labels correspond to checkbox order.
     for (const point of this._live || []) {
       if (point.temperature < geometry.temperatureMin || point.temperature > geometry.temperatureMax
-        || point.absolute > geometry.absoluteMax) continue;
+        || point.absolute < geometry.absoluteMin || point.absolute > geometry.absoluteMax) continue;
       const x = geometry.x(point.temperature);
       const y = geometry.y(point.absolute);
       svg.push(`<circle cx="${x}" cy="${y}" r="7" fill="#ff3d8d" fill-opacity=".25" stroke="#ff3d8d" stroke-width="2"/>`);
@@ -941,14 +1125,16 @@ class PsychrometricChartCard extends HTMLElement {
     const absolute = this._geom.inverseY(chartY);
     const temperatureIndex = Math.floor((temperature - this._geom.temperatureMin)
       / this._data.temperatureStep);
-    const absoluteIndex = Math.floor(absolute / this._data.absoluteStep);
+    const absoluteIndex = Math.floor((absolute - this._data.bounds.absoluteMin)
+      / this._data.absoluteStep);
     const bin = this._data.bins.find((item) => item.temperatureIndex === temperatureIndex
       && item.absoluteIndex === absoluteIndex);
     if (!bin) { this._els.tooltip.style.display = "none"; return; }
 
     const temperature0 = this._geom.temperatureMin
       + temperatureIndex * this._data.temperatureStep;
-    const absolute0 = absoluteIndex * this._data.absoluteStep;
+    const absolute0 = this._data.bounds.absoluteMin
+      + absoluteIndex * this._data.absoluteStep;
     const centreTemperature = temperature0 + this._data.temperatureStep / 2;
     const centreAbsolute = absolute0 + this._data.absoluteStep / 2;
     const share = this._data.totalHours ? 100 * bin.hours / this._data.totalHours : 0;
