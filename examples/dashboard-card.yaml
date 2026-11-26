@@ -1,7 +1,8 @@
 type: custom:psychrometric-chart-card
 title: Psychrometric frequency
-default_range: 1m
+default_range: 12m
 default_colour_mode: original
+default_axis_mode: auto_both
 
 # If pressure is omitted, station pressure is calculated from altitude and
 # sea-level pressure using the standard-atmosphere approximation.
@@ -11,6 +12,7 @@ humidity_ratio_reference_temperature: 20
 
 min_temperature: -10
 max_temperature: 40
+min_absolute_humidity: 0
 max_absolute_humidity: 25
 temperature_bin: 0.5
 absolute_humidity_bin: 0.25
