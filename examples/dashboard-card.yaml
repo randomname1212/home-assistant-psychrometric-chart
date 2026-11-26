@@ -1,0 +1,59 @@
+type: custom:psychrometric-chart-card
+title: Psychrometric frequency
+default_range: 1m
+default_colour_mode: original
+
+# If pressure is omitted, station pressure is calculated from altitude and
+# sea-level pressure using the standard-atmosphere approximation.
+altitude: 0
+sea_level_pressure: 101.325
+humidity_ratio_reference_temperature: 20
+
+min_temperature: -10
+max_temperature: 40
+max_absolute_humidity: 25
+temperature_bin: 0.5
+absolute_humidity_bin: 0.25
+
+# Add or remove as many pairs as required. Row/index numbers are generated
+# dynamically from this list.
+series:
+  - name: Outside air
+    temperature: sensor.outsideair_temperature
+    humidity: sensor.outsideair_humidity
+    color: "#f44336"
+    default_visible: true
+  - name: Bathroom
+    temperature: sensor.bathroom_temperature
+    humidity: sensor.bathroom_humidity
+    color: "#e91e63"
+  - name: Bay window seat
+    temperature: sensor.baywindowseat_temperature
+    humidity: sensor.baywindowseat_humidity
+    color: "#6d4c41"
+  - name: Ensuite
+    temperature: sensor.ensuite_temperature
+    humidity: sensor.ensuite_humidity
+    color: "#9c27b0"
+  - name: Hallway
+    temperature: sensor.hallway_temperature
+    humidity: sensor.hallway_humidity
+    color: "#ff9800"
+  - name: Kitchen
+    temperature: sensor.kitchen_temperature
+    humidity: sensor.kitchen_humidity
+    color: "#009688"
+  - name: Living room
+    temperature: sensor.livingroom_temperature
+    humidity: sensor.livingroom_humidity
+    color: "#4caf50"
+  - name: Master bedroom
+    temperature: sensor.masterbedroom_temperature
+    humidity: sensor.masterbedroom_humidity
+    color: "#3f51b5"
+  - name: Small bedroom
+    temperature: sensor.smallbedroom_temperature
+    humidity: sensor.smallbedroom_humidity
+    color: "#2196f3"
+
+

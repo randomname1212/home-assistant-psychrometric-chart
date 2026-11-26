@@ -1,0 +1,8 @@
+title: Psychrometrics
+path: psychro
+icon: mdi:chart-bell-curve-cumulative
+type: panel
+cards:
+  - !include dashboard-card.yaml
+
+
