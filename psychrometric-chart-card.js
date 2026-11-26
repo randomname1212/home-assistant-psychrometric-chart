@@ -308,7 +308,7 @@ class PsychrometricChartCard extends HTMLElement {
   // Axis settings are dashboard presentation preferences. Keeping them in
   // local storage makes manual fixed bounds survive ordinary browser reloads.
   _readAxisPreferences() {
-    const allowedModes = ["auto_both", "auto_temperature", "auto_humidity", "fixed"];
+    const allowedModes = ["auto_both", "auto_temperature", "auto_humidity", "fixed", "default"];
     const defaults = {
       mode: this.config.default_axis_mode,
       temperatureMin: Number(this.config.min_temperature),
@@ -436,6 +436,7 @@ class PsychrometricChartCard extends HTMLElement {
           <option value="auto_temperature">Auto scale temperature</option>
           <option value="auto_humidity">Auto scale humidity</option>
           <option value="fixed">Fixed custom scales</option>
+          <option value="default">Default scale (original)</option>
         </select>
         <button class="refresh" title="Refresh statistics"><ha-icon icon="mdi:refresh"></ha-icon> Refresh</button>
       </div>
@@ -651,8 +652,28 @@ class PsychrometricChartCard extends HTMLElement {
     };
   }
 
-  // Validate the four manually configured limits. This is also the fallback
-  // used by automatic modes when no historical samples are available.
+  // Return the original Lovelace limits. The dashboard's "Default scale"
+  // option always uses these values, independently of saved custom limits.
+  _originalBounds(validate = true) {
+    const bounds = {
+      temperatureMin: Number(this.config.min_temperature),
+      temperatureMax: Number(this.config.max_temperature),
+      absoluteMin: Number(this.config.min_absolute_humidity),
+      absoluteMax: Number(this.config.max_absolute_humidity),
+    };
+    const finite = Object.values(bounds).every((value) => Number.isFinite(value));
+    const ordered = bounds.temperatureMin < bounds.temperatureMax
+      && bounds.absoluteMin < bounds.absoluteMax;
+    if (validate && (!finite || !ordered)) {
+      throw new Error("Default axis minimums must be numeric and lower than their maximums.");
+    }
+    return finite && ordered
+      ? bounds
+      : { temperatureMin: -10, temperatureMax: 40, absoluteMin: 0, absoluteMax: 25 };
+  }
+
+  // Validate the four manually configured limits. These values are retained
+  // while the user temporarily switches to automatic or default scaling.
   _configuredBounds(validate = true) {
     const bounds = { ...this._fixedBounds };
     const finite = Object.values(bounds).every((value) => Number.isFinite(value));
@@ -661,16 +682,16 @@ class PsychrometricChartCard extends HTMLElement {
     if (validate && (!finite || !ordered)) {
       throw new Error("Fixed axis minimums must be numeric and lower than their maximums.");
     }
-    if (!finite || !ordered) {
-      return { temperatureMin: -10, temperatureMax: 40, absoluteMin: 0, absoluteMax: 25 };
-    }
-    return bounds;
+    return finite && ordered ? bounds : this._originalBounds(false);
   }
 
   // Automatic bounds are calculated from the actual selected recorder samples.
   // A small pad and rounded half-unit limits avoid data touching the frame.
   _axisBounds(samples) {
-    const fixed = this._configuredBounds(true);
+    // "Default" is an explicit reset to the original Lovelace bounds. It does
+    // not discard the user's custom values, so returning to Fixed restores them.
+    const fixed = this._axisMode === "default"
+      ? this._originalBounds(true) : this._configuredBounds(true);
     const autoTemperature = ["auto_both", "auto_temperature"].includes(this._axisMode);
     const autoHumidity = ["auto_both", "auto_humidity"].includes(this._axisMode);
     if ((!autoTemperature && !autoHumidity) || !samples.length) return fixed;
