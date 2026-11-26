@@ -369,9 +369,12 @@ class PsychrometricChartCard extends HTMLElement {
       .custom-range input { box-sizing:border-box; height:32px; border-radius:7px;
         border:1px solid var(--divider-color); background:var(--card-background-color);
         color:var(--primary-text-color); font:inherit; padding:0 7px; color-scheme:dark light; }
-      .axis-controls { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px;
-        padding:0 16px 9px; color:var(--secondary-text-color); font-size:12px; }
-      .axis-controls[hidden] { display:none; }
+      .axis-controls { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap;
+        gap:6px 10px; min-height:32px; padding:0 16px 9px;
+        color:var(--secondary-text-color); font-size:12px; }
+      /* Keep the row in the layout when inactive so changing scale mode never
+         shifts the graph vertically; only its visible contents are toggled. */
+      .axis-controls.is-hidden { visibility:hidden; pointer-events:none; }
       .axis-controls label { display:inline-flex; align-items:center; gap:5px; }
       .axis-controls input { box-sizing:border-box; width:76px; height:32px; border-radius:7px;
         border:1px solid var(--divider-color); background:var(--card-background-color);
@@ -444,7 +447,7 @@ class PsychrometricChartCard extends HTMLElement {
         <label>Start <input class="custom-start" type="date"></label>
         <label>End <input class="custom-end" type="date"></label>
       </div>
-      <div class="axis-controls" hidden>
+      <div class="axis-controls is-hidden" aria-hidden="true">
         <label>Temperature min <input class="axis-temperature-min" type="number" step="0.5"> °C</label>
         <label>Temperature max <input class="axis-temperature-max" type="number" step="0.5"> °C</label>
         <label>Absolute humidity min <input class="axis-absolute-min" type="number" step="0.25"> g/m³</label>
@@ -547,14 +550,18 @@ class PsychrometricChartCard extends HTMLElement {
     this._els.customStart.addEventListener("change", customDateChanged);
     this._els.customEnd.addEventListener("change", customDateChanged);
     this._els.axisMode.value = this._axisMode;
-    this._els.axisControls.hidden = this._axisMode !== "fixed";
+    const fixedControlsVisible = this._axisMode === "fixed";
+    this._els.axisControls.classList.toggle("is-hidden", !fixedControlsVisible);
+    this._els.axisControls.setAttribute("aria-hidden", String(!fixedControlsVisible));
     this._els.axisTemperatureMin.value = String(this._fixedBounds.temperatureMin);
     this._els.axisTemperatureMax.value = String(this._fixedBounds.temperatureMax);
     this._els.axisAbsoluteMin.value = String(this._fixedBounds.absoluteMin);
     this._els.axisAbsoluteMax.value = String(this._fixedBounds.absoluteMax);
     this._els.axisMode.addEventListener("change", () => {
       this._axisMode = this._els.axisMode.value;
-      this._els.axisControls.hidden = this._axisMode !== "fixed";
+      const showFixedControls = this._axisMode === "fixed";
+      this._els.axisControls.classList.toggle("is-hidden", !showFixedControls);
+      this._els.axisControls.setAttribute("aria-hidden", String(!showFixedControls));
       this._saveAxisPreferences();
       this._data = null;
       this._loadKey = null;
