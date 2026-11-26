@@ -18,7 +18,8 @@ statistics.
 - Live numbered markers for every visible sensor.
 - 1-day, 1-week, 1-month, 6-month, 12-month and custom date ranges.
 - Dashboard controls for automatic temperature scaling, automatic humidity
-  scaling, both axes together, or persistent fixed custom bounds.
+  scaling, both axes together, persistent fixed custom bounds, or restoring
+  the original configured scale.
 - Five-minute recorder buckets for short periods and hourly buckets for longer
   periods.
 - No third-party JavaScript dependencies and no helper entities.
@@ -60,7 +61,7 @@ tagged release is created.
 | `series` | required | Temperature/humidity entity pairs. |
 | `default_range` | `12m` | Initial range: `1d`, `1w`, `1m`, `6m`, `12m`, or `custom`. |
 | `default_colour_mode` | `original` | `original` spectrum or `sensor` gradients. |
-| `default_axis_mode` | `auto_both` | Initial scale: `auto_both`, `auto_temperature`, `auto_humidity`, or `fixed`. |
+| `default_axis_mode` | `auto_both` | Initial scale: `auto_both`, `auto_temperature`, `auto_humidity`, `fixed`, or `default`. |
 | `altitude` | `0` | Site altitude in metres. |
 | `sea_level_pressure` | `101.325` | Sea-level pressure in kPa. |
 | `pressure` | calculated | Optional explicit station pressure in kPa. |
@@ -87,6 +88,8 @@ Axis mode and fixed custom bounds are selected directly in the card and saved
 in browser storage. In a single-axis automatic mode, the other axis retains
 its configured fixed limits. Automatic bounds use the selected sensors and
 active history period, with padding so observations do not touch the frame.
+Selecting **Default scale (original)** immediately restores the Lovelace
+`min_*`/`max_*` limits without deleting the user's saved custom limits.
 
 ## Understanding the secondary scale
 
