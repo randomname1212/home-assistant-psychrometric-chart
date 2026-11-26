@@ -17,6 +17,8 @@ statistics.
 - Any number of dynamically numbered, independently selectable sensor pairs.
 - Live numbered markers for every visible sensor.
 - 1-day, 1-week, 1-month, 6-month, 12-month and custom date ranges.
+- Dashboard controls for automatic temperature scaling, automatic humidity
+  scaling, both axes together, or persistent fixed custom bounds.
 - Five-minute recorder buckets for short periods and hourly buckets for longer
   periods.
 - No third-party JavaScript dependencies and no helper entities.
@@ -56,14 +58,15 @@ tagged release is created.
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `series` | required | Temperature/humidity entity pairs. |
-| `default_range` | `1m` | Initial range: `1d`, `1w`, `1m`, `6m`, `12m`, or `custom`. |
+| `default_range` | `12m` | Initial range: `1d`, `1w`, `1m`, `6m`, `12m`, or `custom`. |
 | `default_colour_mode` | `original` | `original` spectrum or `sensor` gradients. |
+| `default_axis_mode` | `auto_both` | Initial scale: `auto_both`, `auto_temperature`, `auto_humidity`, or `fixed`. |
 | `altitude` | `0` | Site altitude in metres. |
 | `sea_level_pressure` | `101.325` | Sea-level pressure in kPa. |
 | `pressure` | calculated | Optional explicit station pressure in kPa. |
 | `humidity_ratio_reference_temperature` | `20` | Reference temperature used only for the equivalent secondary scale. |
-| `min_temperature` / `max_temperature` | `-10` / `40` | Horizontal chart limits in °C. |
-| `max_absolute_humidity` | `25` | Primary vertical chart limit in g/m³. |
+| `min_temperature` / `max_temperature` | `-10` / `40` | Fixed/fallback horizontal limits in °C. |
+| `min_absolute_humidity` / `max_absolute_humidity` | `0` / `25` | Fixed/fallback primary vertical limits in g/m³. |
 | `temperature_bin` | `0.5` | Histogram temperature resolution in °C. |
 | `absolute_humidity_bin` | `0.25` | Histogram moisture resolution in g/m³. |
 
@@ -79,6 +82,11 @@ Each `series` entry supports:
 
 Colour choices made in the card are saved in browser storage and Home
 Assistant per-user frontend data.
+
+Axis mode and fixed custom bounds are selected directly in the card and saved
+in browser storage. In a single-axis automatic mode, the other axis retains
+its configured fixed limits. Automatic bounds use the selected sensors and
+active history period, with padding so observations do not touch the frame.
 
 ## Understanding the secondary scale
 
